@@ -38,6 +38,11 @@ export interface LoanFormData {
 
   salaryPayslips?: File[];
   payslipPasswords?: string[];       // ✅ per-file passwords
+
+  // 🔹 NEW fields to hold analysis results
+  callLogsAnalysis?: any;
+  mpesaAnalysis?: any;
+  imagesAnalysis?: any;
 }
 
 export interface Loan {

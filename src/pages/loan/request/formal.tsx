@@ -6,11 +6,14 @@ import { submitLoanForm } from "../../../api/submitform";
 import DocumentUploader from "../../../components/ui/DocumentUploader";
 import GuarantorFields from "../../../components/forms/GuarantorFields";
 import ProgressSteps from "../../../components/ui/progressBar";
+import { analyzeCallLogs } from "../../../api/callLogsApi";
+import { analyzeMpesa } from "../../../api/analyzeMpesa";
+import { uploadImages } from "../../../api/imagesAnalyzer";
 
 const FormalLoanRequest: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const steps = ["Requirements", "Documents", "Loan Details"];
+  const steps = ["Requirements", "Assets", "Documents", "Loan Details"];
 
   // state
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -45,6 +48,7 @@ const FormalLoanRequest: React.FC = () => {
   const hasRetailBusiness = watch("hasRetailBusiness");
 
   const onSubmit = async (data: LoanFormData) => {
+    // 🔹 Validate uploads
     if (assets.length < 3) {
       alert("Please upload at least 3 asset pictures");
       return;
@@ -64,6 +68,62 @@ const FormalLoanRequest: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const jobs: Promise<void>[] = [];
+
+      // 🔹 1. Analyze Call Logs
+      if (callLogs.length > 0) {
+        jobs.push(
+          analyzeCallLogs(
+            callLogs[0],
+            data.guarantors?.[0]?.idNumber || "unknown-id"
+          )
+            .then((res) => {
+              data.callLogsAnalysis = res.analysis;
+              console.log("Call Logs Analysis:", res);
+            })
+            .catch((err) => console.error("Error analyzing call logs:", err))
+        );
+      }
+
+      // 🔹 2. Analyze M-Pesa Statements
+      if (mpesaStatements.length > 0) {
+        jobs.push(
+          analyzeMpesa(
+            mpesaStatements[0],
+            data.mpesaStatementPassword || "0000"
+          )
+            .then((res) => {
+              data.mpesaAnalysis = res.analysis;
+              console.log("M-Pesa Analysis:", res);
+            })
+            .catch((err) => console.error("Error analyzing M-Pesa:", err))
+        );
+      }
+
+      // 🔹 3. Upload all images (assets + homeFloor + shop)
+      const allImages: File[] = [
+        ...assets.map((a) => a.file),
+        ...homeFloorPhoto,
+        ...(hasRetailBusiness ? shopPicture : []),
+      ];
+      if (allImages.length > 0) {
+        jobs.push(
+          uploadImages(allImages)
+            .then((res) => {
+              data.imagesAnalysis = {
+                gpsUpload: res.gpsUpload,
+                batchAnalysis: res.batchAnalysis,
+              };
+              console.log("Images Upload Analysis:", data.imagesAnalysis);
+            })
+            .catch((err) => console.error("Error uploading images:", err))
+        );
+      }
+
+      // run all analyses in parallel
+      await Promise.all(jobs);
+
+      // 🔹 4. Build loan form data
       const formData: LoanFormData = {
         ...data,
         assets,
@@ -72,7 +132,7 @@ const FormalLoanRequest: React.FC = () => {
         bankStatementPassword:
           bankStatements.length > 0 ? data.bankStatementPassword : undefined,
         salaryPayslips,
-        payslipPasswords, // ✅ now array of strings
+        payslipPasswords, // ✅ array of strings
         proofOfIllness: proofOfIllness[0],
         shopPicture: hasRetailBusiness ? shopPicture[0] : undefined,
         mpesaStatements,
@@ -81,6 +141,7 @@ const FormalLoanRequest: React.FC = () => {
         callLogs,
       };
 
+      // 🔹 5. Submit loan
       const response = await submitLoanForm(formData);
       navigate(`/loan/pending/${response.id || "mock-id"}`);
     } catch (error) {
@@ -145,6 +206,7 @@ const FormalLoanRequest: React.FC = () => {
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-10">
             {/* ---------------- REQUIREMENTS PAGE ---------------- */}
+            {/* ---------------- STEP 0: REQUIREMENTS ---------------- */}
             {step === 0 && (
               <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
@@ -157,36 +219,47 @@ const FormalLoanRequest: React.FC = () => {
 
                 <ol className="list-decimal list-inside text-gray-700 space-y-2 mt-4">
                   <li>
-                    At least <b>3 clear photos of your most valuable assets.</b>{" "}
+                    At least <b>3 clear photos of your most valuable assets.</b>
                     This may include Car, Farm, Fridge, TV etc.
                   </li>
                   <li>
                     <b>Photo of your current residence</b>
                   </li>
                   <li>
+                    (Optional) <b>Proof of illness</b> (doctor’s note, hospital
+                    card, etc.)
+                  </li>
+                  <li>
                     <b>6 months bank statement document</b> (with password if
                     protected)
                   </li>
                   <li>
-                    <b>Salary payslips for 3 months</b> (with password if
+                    <b>Salary payslips for 6 months</b> (with password if
                     protected)
                   </li>
                   <li>
-                    <b>M-Pesa statements</b> (with password if protected,
-                    optional)
+                    (Optional) <b>M-Pesa statements</b> (with password if
+                    protected)
                   </li>
                   <li>
-                    <b>Your call log report</b> (Download this app to get your
-                    call log report under 2mins)
+                    Call Detail Records (Call Logs): Download this{" "}
+                    <a
+                      href="https://play.google.com/store/apps/details?id=com.loopvector.allinonebackup.calllogsbackup"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      APP
+                    </a>{" "}
+                    to get your call log record document in under 2 mins
                   </li>
                   <li>
                     Details of <b>2 guarantors</b> (name, ID number, and
                     contact)
                   </li>
                   <li>
-                    (Optional) <b>Proof of illness</b> and if you own a{" "}
-                    <b>retail business</b>: registration number, location, and a
-                    shop picture
+                    (Optional) If you own a <b>retail business</b>: registration
+                    number, location, and a shop picture
                   </li>
                 </ol>
 
@@ -207,11 +280,10 @@ const FormalLoanRequest: React.FC = () => {
               </div>
             )}
 
-            {/* ---------------- DOCUMENT UPLOAD PAGE ---------------- */}
+            {/* ---------------- STEP 1: ASSETS ---------------- */}
             {step === 1 && (
               <>
-                {/* Assets */}
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
+                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     Asset Photos (min 3)
                   </h3>
@@ -223,18 +295,21 @@ const FormalLoanRequest: React.FC = () => {
                       if (e.target.files) {
                         const newAssets: Asset[] = Array.from(
                           e.target.files
-                        ).map((file) => ({ file, name: file.name }));
+                        ).map((file) => ({
+                          file,
+                          name: file.name,
+                        }));
                         setAssets([...assets, ...newAssets]);
                       }
                     }}
                     className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 
-                               file:rounded-lg file:border-0 file:text-sm file:font-semibold
-                               file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
+                   file:rounded-lg file:border-0 file:text-sm file:font-semibold
+                   file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
                   />
                   {assets.length > 0 && renderAssetPreviews(assets, setAssets)}
                 </div>
 
-                {/* Home Floor */}
+                {/* Home Verification */}
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     Home Verification
@@ -248,11 +323,82 @@ const FormalLoanRequest: React.FC = () => {
                   />
                   {homeFloorPhoto.length > 0 && renderPreviews(homeFloorPhoto)}
                 </div>
+                {/* Retail Business */}
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    {...register("hasRetailBusiness")}
+                    className="rounded border-gray-300 text-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    I own a retail business
+                  </span>
+                </label>
 
-                {/* Bank + Payslips */}
+                {hasRetailBusiness && (
+                  <div className="space-y-4 pl-6 border-l-2 border-blue-100">
+                    <input
+                      type="text"
+                      placeholder="Business Registration Number"
+                      {...register("businessRegistrationNumber")}
+                      className="w-full px-3 py-2 border rounded-md"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Business Location"
+                      {...register("businessLocation")}
+                      className="w-full px-3 py-2 border rounded-md"
+                    />
+                    <DocumentUploader
+                      label="Shop Picture"
+                      files={shopPicture}
+                      onFilesChange={setShopPicture}
+                      accept="image/*"
+                    />
+                    {shopPicture.length > 0 && renderPreviews(shopPicture)}
+                  </div>
+                )}
+
+                {/* Proof of Illness */}
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Required Documents
+                    Proof of Illness (Optional)
+                  </h3>
+                  <DocumentUploader
+                    label="Upload Medical Proof"
+                    files={proofOfIllness}
+                    onFilesChange={setProofOfIllness}
+                    accept="image/*"
+                  />
+                  {proofOfIllness.length > 0 && renderPreviews(proofOfIllness)}
+                </div>
+
+                {/* Navigation */}
+                <div className="flex justify-between pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="px-6 py-3 border rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ---------------- STEP 2: DOCUMENTS ---------------- */}
+            {step === 2 && (
+              <>
+                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                    Bank & Salary Documents
                   </h3>
 
                   {/* Bank Statements */}
@@ -264,28 +410,25 @@ const FormalLoanRequest: React.FC = () => {
                     required
                   />
                   {bankStatements.length > 0 && (
-                    <>
-                      {renderPreviews(bankStatements)}
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Bank Statement Password
-                        </label>
-                        <input
-                          type="password"
-                          {...register("bankStatementPassword")}
-                          className="w-full px-3 py-2 border rounded-md"
-                        />
-                      </div>
-                    </>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bank Statement Password
+                      </label>
+                      <input
+                        type="password"
+                        {...register("bankStatementPassword")}
+                        className="w-full px-3 py-2 border rounded-md"
+                      />
+                    </div>
                   )}
+
                   {/* Salary Payslips */}
-                  <div className="mt-6">
+                  <div>
                     <DocumentUploader
                       label="Salary Payslips (6 months)"
                       files={salaryPayslips}
                       onFilesChange={(newFiles) => {
                         setSalaryPayslips(newFiles);
-                        // ensure passwords array stays in sync
                         setPayslipPasswords((prev) =>
                           newFiles.map((_, idx) => prev[idx] || "")
                         );
@@ -295,8 +438,7 @@ const FormalLoanRequest: React.FC = () => {
                     />
                     {salaryPayslips.length > 0 && (
                       <>
-                        {renderPreviews(salaryPayslips)}
-                        {salaryPayslips.map((file, idx) => (
+                        {salaryPayslips.map((_, idx) => (
                           <div key={idx} className="mt-4">
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Payslip Password {idx + 1}
@@ -318,60 +460,53 @@ const FormalLoanRequest: React.FC = () => {
                   </div>
                 </div>
 
-                {/* M-Pesa */}
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
+                {/* Mpesa + Call Logs */}
+                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    M-Pesa Statements
+                    Mobile Money & Call Logs
                   </h3>
+
                   <DocumentUploader
-                    label="Upload Statements"
+                    label="M-Pesa Statements"
                     files={mpesaStatements}
                     onFilesChange={setMpesaStatements}
                     multiple
                   />
                   {mpesaStatements.length > 0 && (
-                    <>
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          M-Pesa Statement Password
-                        </label>
-                        <input
-                          type="password"
-                          {...register("mpesaStatementPassword")}
-                          className="w-full px-3 py-2 border rounded-md"
-                        />
-                      </div>
-                      {renderPreviews(mpesaStatements)}
-                    </>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        M-Pesa Statement Password
+                      </label>
+                      <input
+                        type="password"
+                        {...register("mpesaStatementPassword")}
+                        className="w-full px-3 py-2 border rounded-md"
+                      />
+                    </div>
                   )}
-                </div>
 
-                {/* Call Logs */}
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Call Logs
-                  </h3>
+                  {/* Call Logs */}
                   <DocumentUploader
                     label="Upload Call Logs"
                     files={callLogs}
                     onFilesChange={setCallLogs}
                     multiple
+                    accept=".csv"
                   />
-                  {callLogs.length > 0 && renderPreviews(callLogs)}
                 </div>
 
-                {/* Navigation for Step 1 */}
+                {/* Navigation */}
                 <div className="flex justify-between pt-6">
                   <button
                     type="button"
-                    onClick={() => setStep(0)}
+                    onClick={() => setStep(1)}
                     className="px-6 py-3 border rounded-lg text-gray-700 bg-white hover:bg-gray-50"
                   >
                     Back
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStep(2)}
+                    onClick={() => setStep(3)}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Continue
@@ -380,11 +515,12 @@ const FormalLoanRequest: React.FC = () => {
               </>
             )}
 
-            {/* ---------------- LOAN DETAILS PAGE ---------------- */}
-            {step === 2 && (
+            {/* ---------------- STEP 3: LOAN DETAILS ---------------- */}
+            {step === 3 && (
               <>
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Amount */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Amount Requested *
@@ -408,6 +544,7 @@ const FormalLoanRequest: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Repayment Date */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Repayment Date *
@@ -432,57 +569,14 @@ const FormalLoanRequest: React.FC = () => {
                     </div>
                   </div>
 
-                  <DocumentUploader
-                    label="Proof of Illness (Optional)"
-                    files={proofOfIllness}
-                    onFilesChange={setProofOfIllness}
-                  />
-                  {proofOfIllness.length > 0 && renderPreviews(proofOfIllness)}
-
-                  {/* Retail Business */}
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      {...register("hasRetailBusiness")}
-                      className="rounded border-gray-300 text-blue-600"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      I own a retail business
-                    </span>
-                  </label>
-
-                  {hasRetailBusiness && (
-                    <div className="space-y-4 pl-6 border-l-2 border-blue-100">
-                      <input
-                        type="text"
-                        placeholder="Business Registration Number"
-                        {...register("businessRegistrationNumber")}
-                        className="w-full px-3 py-2 border rounded-md"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Business Location"
-                        {...register("businessLocation")}
-                        className="w-full px-3 py-2 border rounded-md"
-                      />
-                      <DocumentUploader
-                        label="Shop Picture"
-                        files={shopPicture}
-                        onFilesChange={setShopPicture}
-                        accept="image/*"
-                      />
-                      {shopPicture.length > 0 && renderPreviews(shopPicture)}
-                    </div>
-                  )}
-
                   <GuarantorFields register={register} errors={errors} />
                 </div>
 
-                {/* Navigation for Step 2 */}
+                {/* Navigation */}
                 <div className="flex justify-between pt-6">
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => setStep(2)}
                     className="px-6 py-3 border rounded-lg"
                   >
                     Back

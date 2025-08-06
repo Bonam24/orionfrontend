@@ -24,3 +24,7 @@ export const mockAssetValueCheck = async (file: File): Promise<{ value: number; 
   
   return { value, requiresLicense };
 };
+
+
+
+ 

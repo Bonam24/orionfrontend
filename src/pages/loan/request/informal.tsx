@@ -7,11 +7,14 @@ import { submitLoanForm } from "../../../api/submitform";
 import DocumentUploader from "../../../components/ui/DocumentUploader";
 import GuarantorFields from "../../../components/forms/GuarantorFields";
 import ProgressSteps from "../../../components/ui/progressBar";
+import { analyzeCallLogs } from "../../../api/callLogsApi";
+import { analyzeMpesa } from "../../../api/analyzeMpesa";
+import { uploadImages } from "../../../api/imagesAnalyzer";
 
 const InformalLoanRequest: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const steps = ["Requirements", "Documents", "Loan Details"];
+  const steps = ["Requirements", "Assets", "Documents", "Loan Details"];
 
   // file states
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -20,6 +23,8 @@ const InformalLoanRequest: React.FC = () => {
   const [mpesaStatements, setMpesaStatements] = useState<File[]>([]);
   const [callLogs, setCallLogs] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+ 
+
 
   const {
     register,
@@ -41,8 +46,76 @@ const InformalLoanRequest: React.FC = () => {
   const hasRetailBusiness = watch("hasRetailBusiness");
 
   const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
+    // 🔹 Validate uploads for informal
+    if (assets.length < 3) {
+      alert("Please upload at least 3 asset picture");
+      return;
+    }
+    if (homeFloorPhoto.length === 0) {
+      alert("Please upload a photo of your home");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const jobs: Promise<void>[] = [];
+
+      // 🔹 1. Analyze Call Logs
+      if (callLogs.length > 0) {
+        jobs.push(
+          analyzeCallLogs(
+            callLogs[0],
+            data.guarantors?.[0]?.idNumber || "unknown-id"
+          )
+            .then((res) => {
+              (data as any).callLogsAnalysis = res.analysis;
+              console.log("Call Logs Analysis:", res);
+            })
+            .catch((err) => console.error("Error analyzing call logs:", err))
+        );
+      }
+
+      // 🔹 2. Analyze M-Pesa Statements
+      if (mpesaStatements.length > 0) {
+        jobs.push(
+          analyzeMpesa(
+            mpesaStatements[0],
+            data.mpesaStatementPassword || "0000"
+          )
+            .then((res) => {
+              (data as any).mpesaAnalysis = res.analysis;
+              console.log("M-Pesa Analysis:", res);
+            })
+            .catch((err) => console.error("Error analyzing M-Pesa:", err))
+        );
+      }
+
+      // 🔹 3. Upload all images (assets + homeFloor + shop)
+      const allImages: File[] = [
+        ...assets.map((a) => a.file),
+        ...homeFloorPhoto,
+        ...(hasRetailBusiness ? shopPicture : []),
+      ];
+
+      if (allImages.length > 0) {
+        jobs.push(
+          uploadImages(allImages)
+            .then((res) => {
+              // ✅ store both API results
+              (data as any).imagesAnalysis = {
+                gpsUpload: res.gpsUpload,
+                batchAnalysis: res.batchAnalysis,
+              };
+              console.log("Images Upload Analysis:", res);
+            })
+            .catch((err) => console.error("Error uploading images:", err))
+        );
+      }
+
+      // Run all analyses in parallel
+      await Promise.all(jobs);
+
+      // 🔹 4. Build loan form data (informal skips bank/payslip fields)
       const formData: LoanFormData = {
         ...data,
         assets,
@@ -54,6 +127,7 @@ const InformalLoanRequest: React.FC = () => {
         callLogs,
       };
 
+      // 🔹 5. Submit loan
       const response = await submitLoanForm(formData);
       navigate(`/loan/pending/${response.id || "mock-id"}`);
     } catch (error) {
@@ -130,10 +204,21 @@ const InformalLoanRequest: React.FC = () => {
                   </p>
 
                   <ol className="list-decimal list-inside text-gray-700 space-y-2 mt-4">
-                    <li>At least 3 recent asset photos</li>
-                    <li>Photo of your home floor</li>
+                    <li>At least 3 recent photos of valuable assets you own</li>
+                    <li>Photo of your home</li>
                     <li>M-Pesa statements (with password if protected)</li>
-                    <li>Call Detail Records (Call Logs)</li>
+                    <li>
+                      Call Detail Records (Call Logs): Download this{" "}
+                      <a
+                        href="https://play.google.com/store/apps/details?id=com.loopvector.allinonebackup.calllogsbackup"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        APP{" "}
+                      </a>
+                      to get your call log record document under 2 mins
+                    </li>
                     <li>Two guarantors’ details (name, ID, contact)</li>
                     <li>
                       If you own a retail business: registration number,
@@ -154,7 +239,7 @@ const InformalLoanRequest: React.FC = () => {
               </div>
             )}
 
-            {/* Step 1 - Documents */}
+            {/* Step 1 - Assets & Business */}
             {step === 1 && (
               <>
                 {/* Assets */}
@@ -170,13 +255,16 @@ const InformalLoanRequest: React.FC = () => {
                       if (e.target.files) {
                         const newAssets: Asset[] = Array.from(
                           e.target.files
-                        ).map((file) => ({ file, name: file.name }));
+                        ).map((file) => ({
+                          file,
+                          name: file.name,
+                        }));
                         setAssets([...assets, ...newAssets]);
                       }
                     }}
                     className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 
-                               file:rounded-lg file:border-0 file:text-sm file:font-semibold
-                               file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
+                   file:rounded-lg file:border-0 file:text-sm file:font-semibold
+                   file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
                   />
                   {assets.length > 0 && renderAssetPreviews(assets, setAssets)}
                 </div>
@@ -196,6 +284,67 @@ const InformalLoanRequest: React.FC = () => {
                   {homeFloorPhoto.length > 0 && renderPreviews(homeFloorPhoto)}
                 </div>
 
+                {/* Retail Business */}
+                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      {...register("hasRetailBusiness")}
+                      className="rounded border-gray-300 text-blue-600"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      I own a retail business
+                    </span>
+                  </label>
+
+                  {hasRetailBusiness && (
+                    <div className="mt-4 space-y-4 pl-6 border-l-2 border-blue-100">
+                      <input
+                        type="text"
+                        placeholder="Business Registration Number"
+                        {...register("businessRegistrationNumber")}
+                        className="w-full px-3 py-2 border rounded-md"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Business Location"
+                        {...register("businessLocation")}
+                        className="w-full px-3 py-2 border rounded-md"
+                      />
+                      <DocumentUploader
+                        label="Shop Picture"
+                        files={shopPicture}
+                        onFilesChange={setShopPicture}
+                        accept="image/*"
+                      />
+                      {shopPicture.length > 0 && renderPreviews(shopPicture)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Navigation for Step 1 */}
+                <div className="flex justify-between pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="px-6 py-3 border rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2 - Documents */}
+            {step === 2 && (
+              <>
                 {/* Mpesa */}
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -231,21 +380,22 @@ const InformalLoanRequest: React.FC = () => {
                     files={callLogs}
                     onFilesChange={setCallLogs}
                     multiple
+                    accept=".csv"
                   />
                 </div>
 
-                {/* Navigation for Step 1 */}
+                {/* Navigation for Step 2 */}
                 <div className="flex justify-between pt-6">
                   <button
                     type="button"
-                    onClick={() => setStep(0)}
+                    onClick={() => setStep(1)}
                     className="px-6 py-3 border rounded-lg text-gray-700 bg-white hover:bg-gray-50"
                   >
                     Back
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStep(2)}
+                    onClick={() => setStep(3)}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Continue
@@ -254,8 +404,8 @@ const InformalLoanRequest: React.FC = () => {
               </>
             )}
 
-            {/* Step 2 - Loan Details */}
-            {step === 2 && (
+            {/* Step 3 - Loan Details */}
+            {step === 3 && (
               <>
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -296,42 +446,7 @@ const InformalLoanRequest: React.FC = () => {
                     />
                   </div>
 
-                  {/* Retail Business */}
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      {...register("hasRetailBusiness")}
-                      className="rounded border-gray-300 text-blue-600"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      I own a retail business
-                    </span>
-                  </label>
-
-                  {hasRetailBusiness && (
-                    <div className="space-y-4 pl-6 border-l-2 border-blue-100">
-                      <input
-                        type="text"
-                        placeholder="Business Registration Number"
-                        {...register("businessRegistrationNumber")}
-                        className="w-full px-3 py-2 border rounded-md"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Business Location"
-                        {...register("businessLocation")}
-                        className="w-full px-3 py-2 border rounded-md"
-                      />
-                      <DocumentUploader
-                        label="Shop Picture"
-                        files={shopPicture}
-                        onFilesChange={setShopPicture}
-                        accept="image/*"
-                      />
-                      {shopPicture.length > 0 && renderPreviews(shopPicture)}
-                    </div>
-                  )}
-
+                  {/* Guarantors */}
                   <GuarantorFields register={register} errors={errors} />
                 </div>
 
@@ -339,7 +454,7 @@ const InformalLoanRequest: React.FC = () => {
                 <div className="flex justify-between pt-6">
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => setStep(2)}
                     className="px-6 py-3 border rounded-lg"
                   >
                     Back
