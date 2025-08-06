@@ -45,11 +45,7 @@ export const uploadImages = async (files: File[]) => {
   const gpsPromise = axios.post(
     "https://gps-fastapi-upload.onrender.com/upload-images",
     formData1,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
+    { headers: { "Content-Type": "multipart/form-data" } }
   );
 
   // --- API 2: analysis/create_batch ---
@@ -62,32 +58,12 @@ export const uploadImages = async (files: File[]) => {
   const analysisPromise = axios.post(
     "http://157.245.20.199:8000/analysis/create_batch",
     formData2,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
+    { headers: { "Content-Type": "multipart/form-data" } }
   );
 
   // Run both in parallel
-  const [gpsResponse, analysisResponse] = await Promise.all([
-    gpsPromise,
-    analysisPromise,
-  ]);
+  await Promise.all([gpsPromise, analysisPromise]);
 
-  // --- keep the JSON download from API 1 (gps-fastapi-upload) ---
-  const blob = new Blob([JSON.stringify(gpsResponse.data, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `images-analysis-${Date.now()}.json`;
-  link.click();
-
-  // ✅ Return both results
-  return {
-    gpsUpload: gpsResponse.data,
-    batchAnalysis: analysisResponse.data,
-  };
+  // ✅ Just return an okay flag
+  return "ok";
 };
