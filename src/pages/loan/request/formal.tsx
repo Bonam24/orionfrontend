@@ -48,107 +48,106 @@ const FormalLoanRequest: React.FC = () => {
   const hasRetailBusiness = watch("hasRetailBusiness");
 
   const onSubmit = async (data: LoanFormData) => {
-  // 🔹 Validate uploads
-  if (assets.length < 3) {
-    alert("Please upload at least 3 asset pictures");
-    return;
-  }
-  if (homeFloorPhoto.length === 0) {
-    alert("Please upload a photo of your home floor");
-    return;
-  }
-  if (bankStatements.length === 0) {
-    alert("Please upload 6 months of bank statements");
-    return;
-  }
-  if (salaryPayslips.length === 0) {
-    alert("Please upload 6 months of salary payslips");
-    return;
-  }
-
-  setIsSubmitting(true);
-  try {
-    const jobs: Promise<void>[] = [];
-
-    // 🔹 1. Analyze Call Logs
-    if (callLogs.length > 0) {
-      jobs.push(
-        analyzeCallLogs(
-          callLogs[0],
-          data.guarantors?.[0]?.idNumber || "unknown-id"
-        )
-          .then(() => {
-            data.callLogsAnalysis = "ok"; // ✅ flag only
-            console.log("Call Logs Analysis: ok");
-          })
-          .catch((err) => console.error("Error analyzing call logs:", err))
-      );
+    // 🔹 Validate uploads
+    if (assets.length < 3) {
+      alert("Please upload at least 3 asset pictures");
+      return;
+    }
+    if (homeFloorPhoto.length === 0) {
+      alert("Please upload a photo of your home floor");
+      return;
+    }
+    if (bankStatements.length === 0) {
+      alert("Please upload 6 months of bank statements");
+      return;
+    }
+    if (salaryPayslips.length === 0) {
+      alert("Please upload 6 months of salary payslips");
+      return;
     }
 
-    // 🔹 2. Analyze M-Pesa Statements
-    if (mpesaStatements.length > 0) {
-      jobs.push(
-        analyzeMpesa(
-          mpesaStatements[0],
-          data.mpesaStatementPassword || "0000"
-        )
-          .then(() => {
-            data.mpesaAnalysis = "ok"; // ✅ flag only
-            console.log("M-Pesa Analysis: ok");
-          })
-          .catch((err) => console.error("Error analyzing M-Pesa:", err))
-      );
+    setIsSubmitting(true);
+    try {
+      const jobs: Promise<void>[] = [];
+
+      // 🔹 1. Analyze Call Logs
+      if (callLogs.length > 0) {
+        jobs.push(
+          analyzeCallLogs(
+            callLogs[0],
+            data.guarantors?.[0]?.idNumber || "unknown-id"
+          )
+            .then(() => {
+              data.callLogsAnalysis = "ok"; // ✅ flag only
+              console.log("Call Logs Analysis: ok");
+            })
+            .catch((err) => console.error("Error analyzing call logs:", err))
+        );
+      }
+
+      // 🔹 2. Analyze M-Pesa Statements
+      if (mpesaStatements.length > 0) {
+        jobs.push(
+          analyzeMpesa(
+            mpesaStatements[0],
+            data.mpesaStatementPassword || "0000"
+          )
+            .then(() => {
+              data.mpesaAnalysis = "ok"; // ✅ flag only
+              console.log("M-Pesa Analysis: ok");
+            })
+            .catch((err) => console.error("Error analyzing M-Pesa:", err))
+        );
+      }
+
+      // 🔹 3. Upload all images (assets + homeFloor + shop)
+      const allImages: File[] = [
+        ...assets.map((a) => a.file),
+        ...homeFloorPhoto,
+        ...(hasRetailBusiness ? shopPicture : []),
+      ];
+      if (allImages.length > 0) {
+        jobs.push(
+          uploadImages(allImages)
+            .then(() => {
+              data.imagesAnalysis = "ok"; // ✅ flag only
+              console.log("Images Upload Analysis: ok");
+            })
+            .catch((err) => console.error("Error uploading images:", err))
+        );
+      }
+
+      // run all analyses in parallel
+      await Promise.all(jobs);
+
+      // 🔹 4. Build loan form data
+      const formData: LoanFormData = {
+        ...data,
+        assets,
+        homeFloorPhoto: homeFloorPhoto[0],
+        bankStatements,
+        bankStatementPassword:
+          bankStatements.length > 0 ? data.bankStatementPassword : undefined,
+        salaryPayslips,
+        payslipPasswords, // ✅ array of strings
+        proofOfIllness: proofOfIllness[0],
+        shopPicture: hasRetailBusiness ? shopPicture[0] : undefined,
+        mpesaStatements,
+        mpesaStatementPassword:
+          mpesaStatements.length > 0 ? data.mpesaStatementPassword : undefined,
+        callLogs,
+      };
+
+      // 🔹 5. Submit loan
+      const response = await submitLoanForm(formData);
+      navigate(`/loan/pending/${response.id || "mock-id"}`);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      alert("Error submitting loan application. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // 🔹 3. Upload all images (assets + homeFloor + shop)
-    const allImages: File[] = [
-      ...assets.map((a) => a.file),
-      ...homeFloorPhoto,
-      ...(hasRetailBusiness ? shopPicture : []),
-    ];
-    if (allImages.length > 0) {
-      jobs.push(
-        uploadImages(allImages)
-          .then(() => {
-            data.imagesAnalysis = "ok"; // ✅ flag only
-            console.log("Images Upload Analysis: ok");
-          })
-          .catch((err) => console.error("Error uploading images:", err))
-      );
-    }
-
-    // run all analyses in parallel
-    await Promise.all(jobs);
-
-    // 🔹 4. Build loan form data
-    const formData: LoanFormData = {
-      ...data,
-      assets,
-      homeFloorPhoto: homeFloorPhoto[0],
-      bankStatements,
-      bankStatementPassword:
-        bankStatements.length > 0 ? data.bankStatementPassword : undefined,
-      salaryPayslips,
-      payslipPasswords, // ✅ array of strings
-      proofOfIllness: proofOfIllness[0],
-      shopPicture: hasRetailBusiness ? shopPicture[0] : undefined,
-      mpesaStatements,
-      mpesaStatementPassword:
-        mpesaStatements.length > 0 ? data.mpesaStatementPassword : undefined,
-      callLogs,
-    };
-
-    // 🔹 5. Submit loan
-    const response = await submitLoanForm(formData);
-    navigate(`/loan/pending/${response.id || "mock-id"}`);
-  } catch (error) {
-    console.error("Error submitting form:", error);
-    alert("Error submitting loan application. Please try again.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-
+  };
 
   // Asset previews
   const renderAssetPreviews = (
@@ -587,7 +586,13 @@ const FormalLoanRequest: React.FC = () => {
                       bankStatements.length === 0 ||
                       salaryPayslips.length === 0
                     }
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    className="
+    px-4 py-2 text-sm          /* smaller padding + text on small screens */
+    sm:px-6 sm:py-3 sm:text-base /* normal size on sm+ screens */
+    bg-green-600 text-white rounded-lg
+    hover:bg-green-700
+    disabled:opacity-50 disabled:cursor-not-allowed
+  "
                   >
                     {isSubmitting ? "Submitting..." : "Submit Application"}
                   </button>
