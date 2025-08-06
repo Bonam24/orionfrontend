@@ -1,6 +1,5 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import axios from 'axios';
 
 import TestConnection from './TestConnection';
 import Home from './pages/Home';
@@ -11,8 +10,6 @@ import PayLoan from './pages/PayLoan';
 import LoanPending from './pages/LoanPending';
 import UploadPDF from './pages/uploadPDF';
 
-// Create axios instance (you can export and reuse this in other files)
-const api = axios.create({ baseURL: 'http://localhost:5000/api' });
 
 function App() {
   return (
