@@ -179,6 +179,14 @@ const Home: React.FC = () => {
               </button>
               
               <button
+                onClick={() => navigate('/assess-medical-needs')}
+                className="bg-gradient-to-r from-teal-500 to-green-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 flex items-center w-full sm:w-auto justify-center"
+              >
+                <Stethoscope className="w-5 h-5 mr-2" />
+                Assess Medical Needs
+              </button>
+              
+              <button
                 onClick={() => navigate('/loan/pay')}
                 className="bg-white text-gray-700 px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg border-2 border-gray-200 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 flex items-center w-full sm:w-auto justify-center"
               >
