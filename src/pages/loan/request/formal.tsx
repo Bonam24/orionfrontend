@@ -20,7 +20,6 @@ const FormalLoanRequest: React.FC = () => {
   const [homeFloorPhoto, setHomeFloorPhoto] = useState<File[]>([]);
   const [bankStatements, setBankStatements] = useState<File[]>([]);
   const [salaryPayslips, setSalaryPayslips] = useState<File[]>([]);
-  const [proofOfIllness, setProofOfIllness] = useState<File[]>([]);
   const [shopPicture, setShopPicture] = useState<File[]>([]);
   const [mpesaStatements, setMpesaStatements] = useState<File[]>([]);
   const [callLogs, setCallLogs] = useState<File[]>([]);
@@ -47,107 +46,81 @@ const FormalLoanRequest: React.FC = () => {
 
   const hasRetailBusiness = watch("hasRetailBusiness");
 
-  const onSubmit = async (data: LoanFormData) => {
-    // 🔹 Validate uploads
-    if (assets.length < 3) {
-      alert("Please upload at least 3 asset pictures");
-      return;
+const onSubmit = async (data: LoanFormData) => {
+  if (assets.length < 3) {
+    alert("Please upload at least 3 asset pictures");
+    return;
+  }
+  if (homeFloorPhoto.length === 0) {
+    alert("Please upload a photo of your home floor");
+    return;
+  }
+  if (bankStatements.length === 0) {
+    alert("Please upload 6 months of bank statements");
+    return;
+  }
+  if (salaryPayslips.length === 0) {
+    alert("Please upload 6 months of salary payslips");
+    return;
+  }
+
+  setIsSubmitting(true);
+  try {
+    // build formData FIRST
+    const formData: LoanFormData = {
+      ...data,
+      assets,
+      homeFloorPhoto: homeFloorPhoto[0],
+      bankStatements,
+      bankStatementPassword:
+        bankStatements.length > 0 ? data.bankStatementPassword : undefined,
+      salaryPayslips,
+      payslipPasswords,
+      shopPicture: hasRetailBusiness ? shopPicture[0] : undefined,
+      mpesaStatements,
+      mpesaStatementPassword:
+        mpesaStatements.length > 0 ? data.mpesaStatementPassword : undefined,
+      callLogs,
+    };
+
+    // 🔹 Kick off background jobs (no await!)
+    if (callLogs.length > 0) {
+      analyzeCallLogs(
+        callLogs[0],
+        data.guarantors?.[0]?.idNumber || "unknown-id"
+      )
+        .then(() => console.log("Call Logs Analysis: ok"))
+        .catch((err) => console.error("Error analyzing call logs:", err));
     }
-    if (homeFloorPhoto.length === 0) {
-      alert("Please upload a photo of your home floor");
-      return;
-    }
-    if (bankStatements.length === 0) {
-      alert("Please upload 6 months of bank statements");
-      return;
-    }
-    if (salaryPayslips.length === 0) {
-      alert("Please upload 6 months of salary payslips");
-      return;
+
+    if (mpesaStatements.length > 0) {
+      analyzeMpesa(mpesaStatements[0], data.mpesaStatementPassword || "0000")
+        .then(() => console.log("M-Pesa Analysis: ok"))
+        .catch((err) => console.error("Error analyzing M-Pesa:", err));
     }
 
-    setIsSubmitting(true);
-    try {
-      const jobs: Promise<void>[] = [];
-
-      // 🔹 1. Analyze Call Logs
-      if (callLogs.length > 0) {
-        jobs.push(
-          analyzeCallLogs(
-            callLogs[0],
-            data.guarantors?.[0]?.idNumber || "unknown-id"
-          )
-            .then(() => {
-              data.callLogsAnalysis = "ok"; // ✅ flag only
-              console.log("Call Logs Analysis: ok");
-            })
-            .catch((err) => console.error("Error analyzing call logs:", err))
-        );
-      }
-
-      // 🔹 2. Analyze M-Pesa Statements
-      if (mpesaStatements.length > 0) {
-        jobs.push(
-          analyzeMpesa(
-            mpesaStatements[0],
-            data.mpesaStatementPassword || "0000"
-          )
-            .then(() => {
-              data.mpesaAnalysis = "ok"; // ✅ flag only
-              console.log("M-Pesa Analysis: ok");
-            })
-            .catch((err) => console.error("Error analyzing M-Pesa:", err))
-        );
-      }
-
-      // 🔹 3. Upload all images (assets + homeFloor + shop)
-      const allImages: File[] = [
-        ...assets.map((a) => a.file),
-        ...homeFloorPhoto,
-        ...(hasRetailBusiness ? shopPicture : []),
-      ];
-      if (allImages.length > 0) {
-        jobs.push(
-          uploadImages(allImages)
-            .then(() => {
-              data.imagesAnalysis = "ok"; // ✅ flag only
-              console.log("Images Upload Analysis: ok");
-            })
-            .catch((err) => console.error("Error uploading images:", err))
-        );
-      }
-
-      // run all analyses in parallel
-      await Promise.all(jobs);
-
-      // 🔹 4. Build loan form data
-      const formData: LoanFormData = {
-        ...data,
-        assets,
-        homeFloorPhoto: homeFloorPhoto[0],
-        bankStatements,
-        bankStatementPassword:
-          bankStatements.length > 0 ? data.bankStatementPassword : undefined,
-        salaryPayslips,
-        payslipPasswords, // ✅ array of strings
-        proofOfIllness: proofOfIllness[0],
-        shopPicture: hasRetailBusiness ? shopPicture[0] : undefined,
-        mpesaStatements,
-        mpesaStatementPassword:
-          mpesaStatements.length > 0 ? data.mpesaStatementPassword : undefined,
-        callLogs,
-      };
-
-      // 🔹 5. Submit loan
-      const response = await submitLoanForm(formData);
-      navigate(`/loan/pending/${response.id || "mock-id"}`);
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      alert("Error submitting loan application. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+    const allImages: File[] = [
+      ...assets.map((a) => a.file),
+      ...homeFloorPhoto,
+      ...(hasRetailBusiness ? shopPicture : []),
+    ];
+    if (allImages.length > 0) {
+      uploadImages(allImages)
+        .then(() => console.log("Images Upload Analysis: ok"))
+        .catch((err) => console.error("Error uploading images:", err));
     }
-  };
+
+    // 🔹 Submit loan immediately
+    const response = await submitLoanForm(formData);
+    navigate(`/loan/pending/${response.id || "mock-id"}`);
+  } catch (error) {
+    console.error("Error submitting form:", error);
+    alert("Error submitting loan application. Please try again.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   // Asset previews
   const renderAssetPreviews = (
@@ -223,10 +196,6 @@ const FormalLoanRequest: React.FC = () => {
                     <b>Photo of your current residence</b>
                   </li>
                   <li>
-                    (Optional) <b>Proof of illness</b> (doctor’s note, hospital
-                    card, etc.)
-                  </li>
-                  <li>
                     <b>6 months bank statement document</b> (with password if
                     protected)
                   </li>
@@ -282,7 +251,7 @@ const FormalLoanRequest: React.FC = () => {
               <>
                 <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Asset Photos (min 3)
+                    Most Valuable Asset Photos (minimum of 3)
                   </h3>
                   <input
                     type="file"
@@ -312,7 +281,7 @@ const FormalLoanRequest: React.FC = () => {
                     Home Verification
                   </h3>
                   <DocumentUploader
-                    label="Photo of Your Home Floor"
+                    label="Photo of Your Home"
                     files={homeFloorPhoto}
                     onFilesChange={setHomeFloorPhoto}
                     accept="image/*"
@@ -355,20 +324,6 @@ const FormalLoanRequest: React.FC = () => {
                     {shopPicture.length > 0 && renderPreviews(shopPicture)}
                   </div>
                 )}
-
-                {/* Proof of Illness */}
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Proof of Illness (Optional)
-                  </h3>
-                  <DocumentUploader
-                    label="Upload Medical Proof"
-                    files={proofOfIllness}
-                    onFilesChange={setProofOfIllness}
-                    accept="image/*"
-                  />
-                  {proofOfIllness.length > 0 && renderPreviews(proofOfIllness)}
-                </div>
 
                 {/* Navigation */}
                 <div className="flex justify-between pt-6">
@@ -464,7 +419,7 @@ const FormalLoanRequest: React.FC = () => {
                   </h3>
 
                   <DocumentUploader
-                    label="M-Pesa Statements"
+                    label="M-Pesa Statement(s)"
                     files={mpesaStatements}
                     onFilesChange={setMpesaStatements}
                     multiple
