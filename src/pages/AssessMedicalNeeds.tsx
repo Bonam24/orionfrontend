@@ -5,6 +5,7 @@ import { Upload, Pill, FileText, ArrowLeft } from 'lucide-react';
 const AssessMedicalNeeds: React.FC = () => {
   const navigate = useNavigate();
   const [medicamentFiles, setMedicamentFiles] = useState<FileList | null>(null);
+  const [medicamentPreviews, setMedicamentPreviews] = useState<string[]>([]);
   const [prescriptionFiles, setPrescriptionFiles] = useState<FileList | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -12,6 +13,9 @@ const AssessMedicalNeeds: React.FC = () => {
     // Handle form submission logic here
     console.log('Medicament files:', medicamentFiles);
     console.log('Prescription files:', prescriptionFiles);
+    
+    // Navigate to medicine results page
+    navigate('/medicine-results');
   };
 
   return (
@@ -42,7 +46,17 @@ const AssessMedicalNeeds: React.FC = () => {
                   type="file"
                   multiple
                   accept="image/*"
-                  onChange={(e) => setMedicamentFiles(e.target.files)}
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    setMedicamentFiles(files);
+                    
+                    if (files) {
+                      const previews = Array.from(files).map(file => URL.createObjectURL(file));
+                      setMedicamentPreviews(previews);
+                    } else {
+                      setMedicamentPreviews([]);
+                    }
+                  }}
                   className="hidden"
                   id="medicaments"
                 />
@@ -52,9 +66,22 @@ const AssessMedicalNeeds: React.FC = () => {
                   <p className="text-sm text-gray-500 mt-2">PNG, JPG up to 10MB each</p>
                 </label>
                 {medicamentFiles && (
-                  <p className="text-sm text-green-600 mt-2">
-                    {medicamentFiles.length} file(s) selected
-                  </p>
+                  <div className="mt-4">
+                    <p className="text-sm text-green-600 mb-3">
+                      {medicamentFiles.length} file(s) selected
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {medicamentPreviews.map((preview, index) => (
+                        <div key={index} className="relative">
+                          <img
+                            src={preview}
+                            alt={`Medicine ${index + 1}`}
+                            className="w-full h-20 object-cover rounded-lg border border-gray-200"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
