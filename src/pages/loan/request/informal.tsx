@@ -401,6 +401,10 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
                     </div>
 
                     {/* Repayment Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Repayment Date *
+                      </label>
                     <input
                       type="date"
                       min={new Date().toISOString().split("T")[0]}
@@ -412,6 +416,7 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
                       })}
                       className="w-full px-3 py-2 border rounded-md"
                     />
+                    </div>
                   </div>
 
                   {/* Guarantors */}
@@ -429,7 +434,8 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting|| assets.length < 3|| !watch("repaymentDate")
+                      || !watch("amountRequested")|| !watch("guarantors")}
                     className="
     w-full sm:w-auto             /* full width on mobile, auto on larger screens */
     px-4 py-2 text-sm            /* smaller padding + font on small screens */

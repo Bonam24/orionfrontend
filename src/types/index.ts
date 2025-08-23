@@ -2,6 +2,7 @@ export interface Guarantor {
   name: string;
   idNumber: string;
   contact: string;
+  nationality: string;
 }
 
 export interface Asset {

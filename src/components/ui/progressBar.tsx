@@ -6,49 +6,34 @@ interface ProgressStepsProps {
 }
 
 const ProgressSteps: React.FC<ProgressStepsProps> = ({ currentStep, steps }) => {
+  const classesFor = (isActive: boolean, isCompleted: boolean) => {
+    if (isActive) return "bg-blue-600 text-white";
+    if (isCompleted) return "bg-green-500 text-white";
+    return "bg-gray-200 text-gray-700";
+  };
+
   return (
     <div>
-      {/* Mobile: vertical */}
-      <div className="flex flex-col space-y-6 sm:hidden">
+      {/* 📱 Mobile: divided blocks */}
+      <div className="sm:hidden flex w-full border border-gray-300 rounded-lg overflow-hidden">
         {steps.map((step, index) => {
           const isActive = index === currentStep;
           const isCompleted = index < currentStep;
+          const cls = classesFor(isActive, isCompleted);
 
           return (
-            <div key={step} className="flex items-start relative">
-              {/* Circle */}
-              <div
-                className={`flex items-center justify-center w-8 h-8 rounded-full border-2 font-semibold shrink-0
-                  ${
-                    isActive
-                      ? "border-blue-600 bg-blue-600 text-white"
-                      : isCompleted
-                      ? "border-green-500 bg-green-500 text-white"
-                      : "border-gray-300 text-gray-500"
-                  }`}
-              >
-                {index + 1}
-              </div>
-
-              {/* Step Label */}
-              <span
-                className={`ml-3 text-sm font-medium ${
-                  isActive ? "text-blue-600" : "text-gray-600"
-                }`}
-              >
-                {step}
-              </span>
-
-              {/* Vertical connector line */}
-              {index < steps.length - 1 && (
-                <div className="absolute top-8 left-4 w-0.5 h-6 bg-gray-300"></div>
-              )}
+            <div
+              key={step}
+              className={`flex-1 h-12 flex items-center justify-center ${cls} text-[10px] font-medium truncate 
+                ${index < steps.length - 1 ? "border-r border-gray-300" : ""}`}
+            >
+              {step}
             </div>
           );
         })}
       </div>
 
-      {/* Desktop: horizontal */}
+      {/* 💻 Desktop: stepper with circles */}
       <div className="hidden sm:flex items-center justify-between mb-8">
         {steps.map((step, index) => {
           const isActive = index === currentStep;
