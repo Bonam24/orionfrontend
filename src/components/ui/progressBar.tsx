@@ -6,34 +6,50 @@ interface ProgressStepsProps {
 }
 
 const ProgressSteps: React.FC<ProgressStepsProps> = ({ currentStep, steps }) => {
-  const classesFor = (isActive: boolean, isCompleted: boolean) => {
-    if (isActive) return "bg-blue-600 text-white";
-    if (isCompleted) return "bg-green-500 text-white";
-    return "bg-gray-200 text-gray-700";
-  };
-
   return (
     <div>
-      {/* 📱 Mobile: divided blocks */}
-      <div className="sm:hidden flex w-full border border-gray-300 rounded-lg overflow-hidden">
+      {/* 📱 Mobile: horizontal progress tracker */}
+      <div className="sm:hidden relative flex items-center justify-between w-full px-2">
+        {/* Progress line (background) */}
+        <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-300"></div>
+        {/* Progress line (filled) */}
+        <div
+          className="absolute top-1/2 left-0 h-1 bg-blue-600 transition-all duration-500"
+          style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
+        ></div>
+
         {steps.map((step, index) => {
           const isActive = index === currentStep;
           const isCompleted = index < currentStep;
-          const cls = classesFor(isActive, isCompleted);
 
           return (
-            <div
-              key={step}
-              className={`flex-1 h-12 flex items-center justify-center ${cls} text-[10px] font-medium truncate 
-                ${index < steps.length - 1 ? "border-r border-gray-300" : ""}`}
-            >
-              {step}
+            <div key={step} className="flex flex-col items-center flex-1">
+              {/* Circle marker */}
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10
+                  ${
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : isCompleted
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-300 text-gray-600"
+                  }`}
+              >
+                {index + 1}
+              </div>
+              {/* Step label */}
+              <span
+                className={`mt-1 text-[10px] text-center font-medium truncate w-full
+                  ${isActive ? "text-blue-600" : "text-gray-600"}`}
+              >
+                {step}
+              </span>
             </div>
           );
         })}
       </div>
 
-      {/* 💻 Desktop: stepper with circles */}
+      {/* 💻 Desktop: stepper with circles & lines */}
       <div className="hidden sm:flex items-center justify-between mb-8">
         {steps.map((step, index) => {
           const isActive = index === currentStep;
