@@ -148,8 +148,8 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
   );
 
   return (
-    <div className="min-h-screen bg-blue-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-blue-50 py-12 px-4 sm:px-4 lg:px-8">
+      <div className="max-w-5xl mx-auto px-2 sm:px-6 lg:px-8">
         <div className="bg-white rounded-xl shadow-lg p-8 sm:p-10">
           <h1 className="text-3xl font-bold text-gray-900 mb-6 text-center">
             Informal Sector Loan Application
@@ -158,11 +158,11 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
           {/* Progress Steps */}
           <ProgressSteps currentStep={step} steps={steps} />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-10">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-10 w-full">
             {/* Step 0 - Requirements */}
             {step === 0 && (
               <div className="space-y-6">
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm">
+                <div className="w-full bg-gray-50 rounded-xl border p-4 sm:p-2 shadow-sm">
                   <h2 className="text-xl font-semibold text-gray-900">
                     Before You Start
                   </h2>
@@ -375,7 +375,7 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
             {/* Step 3 - Loan Details */}
             {step === 3 && (
               <>
-                <div className="bg-gray-50 rounded-xl border p-6 shadow-sm space-y-6">
+                <div className="w-full bg-gray-50 rounded-xl border p-4 sm:p-6 shadow-sm">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
