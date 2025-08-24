@@ -158,7 +158,7 @@ const onSubmit: SubmitHandler<LoanFormData> = async (data) => {
           {/* Progress Steps */}
           <ProgressSteps currentStep={step} steps={steps} />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-10 w-full">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-10 w-full ">
             {/* Step 0 - Requirements */}
             {step === 0 && (
               <div className="space-y-6">

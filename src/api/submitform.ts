@@ -2,7 +2,7 @@ import api from './axios';
 import type { LoanFormData } from '../types';
 
 export const submitLoanForm = async (formData: LoanFormData) => {
-  const response = await api.post('/submitform', formData);
+  const response = await api.post('/submitLoanForm', formData);
   return response.data;
 };
 
